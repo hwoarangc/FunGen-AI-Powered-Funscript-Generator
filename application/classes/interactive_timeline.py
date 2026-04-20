@@ -1965,6 +1965,8 @@ class InteractiveFunscriptTimeline:
         """Lazy-init gamepad input and detect controllers."""
         from application.live_scripting.gamepad_input import GamepadInput
         self._gamepad_input = GamepadInput()
+        self._gamepad_input.center_mode = bool(
+            self.app.app_settings.get("recording_gamepad_center_mode", True))
         gamepads = self._gamepad_input.detect_gamepads()
         if gamepads:
             self._gamepad_input.active_joystick_id = gamepads[0].joystick_id
@@ -2033,6 +2035,17 @@ class InteractiveFunscriptTimeline:
         changed, inv = imgui.checkbox(f"Inv##{self.timeline_num}_inv", gp.invert_primary)
         if changed:
             gp.invert_primary = inv
+
+        imgui.same_line()
+        changed, cm = imgui.checkbox(f"Center##{self.timeline_num}_cm", gp.center_mode)
+        if changed:
+            gp.center_mode = cm
+            self.app.app_settings.set("recording_gamepad_center_mode", bool(cm))
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(
+                "On: full stick travel maps to 0..100 (rest = 50).\n"
+                "Off: stick deflection magnitude maps to 0..100 (rest = 0)."
+            )
 
         # Deadzone
         imgui.same_line()
