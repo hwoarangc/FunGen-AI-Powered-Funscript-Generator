@@ -493,7 +493,15 @@ class PyAVFrameSource:
             return None
         pumped = 0
         for packet in self._container.demux(self._stream):
-            for frame in packet.decode():
+            try:
+                frames = list(packet.decode())
+            except av.InvalidDataError as e:
+                self.logger.warning(f"skipping corrupt packet after seek: {e}")
+                continue
+            except av.FFmpegError as e:
+                self.logger.warning(f"decode error after seek, skipping: {e}")
+                continue
+            for frame in frames:
                 pumped += 1
                 if pumped > max_pump:
                     return None
@@ -599,7 +607,18 @@ class PyAVFrameSource:
         # Step 2: pull next decoded frame, push to graph, try to pull a
         # filtered frame out. A single decoded frame can yield zero or one
         # filtered frame (graph delays match codec delays). If zero, loop.
-        for frame in self._decode_iter:
+        # Bad packets mid-stream are logged and skipped so playback survives.
+        while True:
+            try:
+                frame = next(self._decode_iter)
+            except StopIteration:
+                break
+            except av.InvalidDataError as e:
+                self.logger.warning(f"skipping corrupt packet: {e}")
+                continue
+            except av.FFmpegError as e:
+                self.logger.warning(f"decode error, skipping: {e}")
+                continue
             if self._stop_event.is_set() or self._seek_target is not None:
                 return
             self._graph.push(frame)
