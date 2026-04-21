@@ -125,6 +125,12 @@ class PyAVFrameSource:
         self._decode_iter = None
         self._eos_drain_done: bool = False
 
+        # Corruption recovery. If InvalidDataError/FFmpegError poisons the
+        # decode iterator, StopIteration right after a decode error is a false
+        # EOS and we should seek past the bad region instead of halting.
+        self._errors_since_last_frame: int = 0
+        self._corruption_recovery_attempts: int = 0
+
     # --------------------------------------------------------------- lifecycle
 
     def open(self) -> bool:
@@ -458,6 +464,37 @@ class PyAVFrameSource:
             return -1
         return int(round(float(pts * self._time_base) * self._fps))
 
+    def _try_recover_from_corruption(self) -> bool:
+        """Rebuild the decode iterator past a poisoned position.
+
+        Called when StopIteration arrives right after a corrupt-packet error:
+        a false EOS caused by the iterator dying mid-file. Seeks a short
+        distance forward and re-opens the iterator. Gives up after a bounded
+        number of attempts or if we're near the real end of the stream."""
+        MAX_ATTEMPTS = 5
+        SKIP_FRAMES = 60
+        if self._corruption_recovery_attempts >= MAX_ATTEMPTS:
+            self.logger.warning(
+                f"corruption recovery: gave up after {MAX_ATTEMPTS} attempts")
+            return False
+        if self._container is None or self._stream is None:
+            return False
+        target = self._current_frame_index + SKIP_FRAMES
+        if self._total_frames and target >= self._total_frames - 1:
+            return False
+        self._corruption_recovery_attempts += 1
+        self._errors_since_last_frame = 0
+        self.logger.info(
+            f"corruption recovery: seeking past bad region "
+            f"(idx {self._current_frame_index} -> {target}, attempt {self._corruption_recovery_attempts})")
+        try:
+            self._seek_to_target(target)
+            self._decode_iter = self._container.decode(self._stream)
+            return True
+        except Exception as e:
+            self.logger.warning(f"corruption recovery seek failed: {e}")
+            return False
+
     def _seek_to_target(self, target: int) -> None:
         """Perform a libavformat seek to ``target`` and align the demux
         cursor so the next decode produces frames at-or-after ``target``.
@@ -607,20 +644,29 @@ class PyAVFrameSource:
         # Step 2: pull next decoded frame, push to graph, try to pull a
         # filtered frame out. A single decoded frame can yield zero or one
         # filtered frame (graph delays match codec delays). If zero, loop.
-        # Bad packets mid-stream are logged and skipped so playback survives.
+        # Bad packets mid-stream are logged; if the iterator then reports
+        # StopIteration without producing a clean frame, it was poisoned and
+        # we recover by seeking past the bad region (Codeit34 report: stream
+        # halted mid-file at a corrupt packet that VLC recovered from).
         while True:
             try:
                 frame = next(self._decode_iter)
             except StopIteration:
+                if self._errors_since_last_frame > 0 and self._try_recover_from_corruption():
+                    continue
                 break
             except av.InvalidDataError as e:
+                self._errors_since_last_frame += 1
                 self.logger.warning(f"skipping corrupt packet: {e}")
                 continue
             except av.FFmpegError as e:
+                self._errors_since_last_frame += 1
                 self.logger.warning(f"decode error, skipping: {e}")
                 continue
             if self._stop_event.is_set() or self._seek_target is not None:
                 return
+            self._errors_since_last_frame = 0
+            self._corruption_recovery_attempts = 0
             self._graph.push(frame)
             if self._try_pull_into_queue():
                 return
