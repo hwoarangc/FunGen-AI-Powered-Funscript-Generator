@@ -465,12 +465,7 @@ class PyAVFrameSource:
         return int(round(float(pts * self._time_base) * self._fps))
 
     def _try_recover_from_corruption(self) -> bool:
-        """Rebuild the decode iterator past a poisoned position.
-
-        Called when StopIteration arrives right after a corrupt-packet error:
-        a false EOS caused by the iterator dying mid-file. Seeks a short
-        distance forward and re-opens the iterator. Gives up after a bounded
-        number of attempts or if we're near the real end of the stream."""
+        """Seek past a poisoned position and re-open the decode iterator."""
         MAX_ATTEMPTS = 5
         SKIP_FRAMES = 60
         if self._corruption_recovery_attempts >= MAX_ATTEMPTS:
@@ -644,10 +639,8 @@ class PyAVFrameSource:
         # Step 2: pull next decoded frame, push to graph, try to pull a
         # filtered frame out. A single decoded frame can yield zero or one
         # filtered frame (graph delays match codec delays). If zero, loop.
-        # Bad packets mid-stream are logged; if the iterator then reports
-        # StopIteration without producing a clean frame, it was poisoned and
-        # we recover by seeking past the bad region (Codeit34 report: stream
-        # halted mid-file at a corrupt packet that VLC recovered from).
+        # Corrupt packets poison the iterator; recover via seek (see
+        # _try_recover_from_corruption).
         while True:
             try:
                 frame = next(self._decode_iter)
