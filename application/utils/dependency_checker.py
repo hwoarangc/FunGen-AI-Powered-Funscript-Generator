@@ -285,8 +285,21 @@ def check_and_install_dependencies(*, non_interactive: bool = True, auto_install
                 logger.info(f"torch-tensorrt for {cuda_version} already installed.")
             except PackageNotFoundError:
                 logger.warning(f"torch-tensorrt for {cuda_version} is missing.")
+                # Pin the currently-installed torch stack on this command so
+                # pip's resolver cannot silently upgrade torch (and drop CUDA
+                # support in the process) while pulling in torch-tensorrt.
+                # Affe report: torch==2.8.0+cu128 got replaced by
+                # torch==2.11.0+cpu after an unpinned torch-tensorrt install.
+                torch_pins = []
+                for pkg in ("torch", "torchvision", "torchaudio"):
+                    try:
+                        torch_pins.append(f"{pkg}=={version(pkg)}")
+                    except PackageNotFoundError:
+                        pass
                 install_cmd = [sys.executable, "-m", "pip", "install", "--no-user",
+                               "--upgrade-strategy", "only-if-needed",
                                "torch-tensorrt", "tensorrt",
+                               *torch_pins,
                                "--extra-index-url", nightly_index_url]
                 try:
                     if auto_install: # Only install if auto_install is True
