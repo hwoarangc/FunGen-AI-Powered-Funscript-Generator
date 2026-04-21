@@ -356,18 +356,6 @@ class ApplicationLogic:
                     self.app_state_ui.selected_tracker_name = fallback
                     self.tracker.set_tracking_mode(fallback)
 
-    def get_timeline(self, timeline_num: int) -> Optional['InteractiveFunscriptTimeline']:
-        """
-        Retrieves the interactive timeline instance for the given timeline number.
-        """
-        if timeline_num == 1:
-            return getattr(self, 'interactive_timeline1', None)
-        elif timeline_num == 2:
-            return getattr(self, 'interactive_timeline2', None)
-        elif timeline_num >= 3 and hasattr(self, 'gui_instance') and self.gui_instance:
-            return self.gui_instance._extra_timeline_editors.get(timeline_num)
-        return None
-
     @staticmethod
     def _purge_old_log_entries(log_file_path: str):
         """Purge log entries older than 7 days. Runs in a background thread."""
@@ -891,19 +879,19 @@ class ApplicationLogic:
                 self.logger.info("Live session ended. Saving raw funscript before post-processing.")
                 self.file_manager.save_raw_funscripts_after_generation(video_path)
 
-                # CRITICAL FIX: Ensure timeline cache reflects final live tracking data
-                # This prevents UA "points disappearing" bug when clicked right after generation
-                timeline1 = getattr(self, 'interactive_timeline1', None)
-                if timeline1 and hasattr(timeline1, 'invalidate_cache'):
-                    timeline1.invalidate_cache()
-                    self.logger.debug("Timeline 1 cache invalidated after live session completion")
-                timeline2 = getattr(self, 'interactive_timeline2', None)
-                if timeline2 and hasattr(timeline2, 'invalidate_cache'):
-                    timeline2.invalidate_cache()
-                    self.logger.debug("Timeline 2 cache invalidated after live session completion")
-                # Invalidate extra timeline caches (3+)
-                if hasattr(self, 'gui_instance') and self.gui_instance:
-                    for t_num, editor in getattr(self.gui_instance, '_extra_timeline_editors', {}).items():
+                # Invalidate every timeline cache so the next render reflects
+                # live-tracking data committed during the run. Prevents the UA
+                # "points disappearing after generation" bug. Earlier code
+                # read self.interactive_timeline1/2 which are never assigned;
+                # timelines live on the GUI instance.
+                gui = getattr(self, 'gui_instance', None)
+                if gui is not None:
+                    for attr in ('timeline_editor1', 'timeline_editor2'):
+                        tl = getattr(gui, attr, None)
+                        if tl is not None and hasattr(tl, 'invalidate_cache'):
+                            tl.invalidate_cache()
+                            self.logger.debug(f"{attr} cache invalidated after live session completion")
+                    for t_num, editor in getattr(gui, '_extra_timeline_editors', {}).items():
                         if hasattr(editor, 'invalidate_cache'):
                             editor.invalidate_cache()
                             self.logger.debug(f"Timeline {t_num} cache invalidated after live session completion")
