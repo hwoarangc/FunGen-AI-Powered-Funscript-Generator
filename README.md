@@ -64,7 +64,7 @@ If a previous FunGen install used miniconda, the installer detects it at the end
 
 ### Migrating from a previous miniconda install
 
-Just `git pull` (or use the in-app updater) and click the launcher again. The launcher self-heals: it sees there's no `.venv`, runs `install.py` once (~2 min), then starts the app. The old `~/miniconda3/envs/FunGen` is left in place until you confirm the new env works — you'll get a one-time prompt at the end of the installer asking what to do with it.
+Just `git pull` (or use the in-app updater) and click the launcher again. The launcher self-heals: it sees there's no `.venv`, runs `install.py` once (~2 min), then starts the app. The old `~/miniconda3/envs/FunGen` is left in place until you confirm the new env works. You will get a one-time prompt at the end of the installer asking what to do with it.
 
 ### Fallback (if the new installer fails)
 
@@ -74,23 +74,24 @@ The previous conda-based installer is still in the repo as `legacy_install_with_
 
 ## Manual Installation
 
-If the automatic installer doesn't fit your setup, you can do it by hand. You only need Python 3.11 (or Python 3.x — uv will install 3.11 for you) and `git`.
+If the automatic installer doesn't fit your setup, you can do it by hand. You only need `git` (uv will install Python 3.11 itself).
 
 ```bash
 git clone --branch main https://github.com/ack00gar/FunGen-AI-Powered-Funscript-Generator.git FunGen
 cd FunGen
-python install.py
+./install.sh        # macOS / Linux
+install.bat         # Windows
 ```
 
-`install.py` is stdlib-only and ~250 lines. It picks the right requirements file from `requirements/` based on your GPU, then installs them into `.venv/` via uv.
+The shim bootstraps `uv` if needed, then runs `install.py` with `uv run --no-project --python 3.11`. `install.py` is stdlib-only, picks the right requirements file from `requirements/` based on your GPU, and installs into `.venv/` via uv.
 
 ### Requirements files (one per channel)
 
 | File | When |
 |---|---|
-| `requirements/base.txt` | Always installed — torch-independent deps (opencv, ultralytics, moderngl, etc.) |
+| `requirements/base.txt` | Always installed: torch-independent deps (opencv, ultralytics, moderngl, etc.) |
 | `requirements/cuda_stable.txt` | NVIDIA RTX 20/30/40-series, A/H/L-series datacenter cards (cu128) |
-| `requirements/cuda_blackwell.txt` | NVIDIA RTX 50-series (RTX 5070/5080/5090) — Blackwell, cu129 |
+| `requirements/cuda_blackwell.txt` | NVIDIA RTX 50-series (RTX 5070/5080/5090), Blackwell, cu129 |
 | `requirements/cpu.txt` | Linux + Windows CPU-only |
 | `requirements/mps.txt` | macOS Apple Silicon (MPS / Metal) |
 | `requirements/rocm.txt` | AMD ROCm on Linux |
@@ -138,7 +139,7 @@ In most cases, the app will automatically detect the best model from your models
 
 **Common Issues:**
 - **Driver too old for installed CUDA wheels**: NVIDIA Studio Driver 555+ is recommended for cu128 (RTX 20/30/40-series); 560+ for cu129 (RTX 50-series Blackwell).
-- **PATH issues**: The system CUDA toolkit is not required — the torch wheels ship their own CUDA libs. Just having `nvidia-smi` work is enough.
+- **PATH issues**: The system CUDA toolkit is not required (the torch wheels ship their own CUDA libs). Just having `nvidia-smi` work is enough.
 - **Right channel?** The installer auto-detects, but you can verify by checking `.venv/bin/python -c "import torch; print(torch.version.cuda)"` matches expectations (12.8 for stable, 12.9 for Blackwell).
 
 **Verification Commands:**
