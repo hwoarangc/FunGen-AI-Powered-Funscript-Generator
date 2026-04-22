@@ -218,6 +218,11 @@ skip_updates.json
 checkpoints/
 *.checkpoint
 
+# Local-only: perf harness + unit tests + bench output
+bench/
+bench_results/
+tests/
+
 # Backup archives and files
 *.zip
 *.bak*
