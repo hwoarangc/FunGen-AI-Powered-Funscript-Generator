@@ -171,6 +171,9 @@ class VideoProcessor(
         # loop as frames are decoded; O(1) lookups for sequential arrow hits.
         self._frame_buffer: deque = deque(maxlen=self._compute_nav_buffer_size())
         self._frame_buffer_lock = threading.Lock()
+        # Dedicated worker for arrow-nav cache misses. Starts here so it
+        # survives reset/open_video cycles; teardown happens on app shutdown.
+        self._init_arrow_async()
 
         # ML format detector (lazy loaded)
         self.ml_detector = None
