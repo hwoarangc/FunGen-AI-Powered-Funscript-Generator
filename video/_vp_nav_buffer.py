@@ -3,9 +3,8 @@ of recently-played frames and the PyAV source for misses.
 
 The buffer is populated by the PyAV processing loop as frames are decoded,
 so sequential forward/backward arrow-key presses land on instant O(1)
-lookups. Misses go through a dedicated async worker so the imgui main
-thread never blocks on get_frame (one hot keyframe seek can be 300+ ms
-on 8K VR).
+lookups. On miss, we fall through to ``pyav_source.get_frame(target)``
+which is ~300ms on 8K VR — no subprocess respawn.
 """
 
 import threading
@@ -94,72 +93,11 @@ class NavBufferMixin:
                     self.frame_cache.clear()
         self._clear_nav_state()
 
-    # ----------------------------------------------------------- async fetch
-
-    def _init_arrow_async(self) -> None:
-        """Spawn the background arrow-nav fetch worker. Called once from
-        VideoProcessor.__init__. Safe to call twice (second call no-ops)."""
-        if getattr(self, "_arrow_thread", None) is not None:
-            return
-        self._arrow_target: Optional[int] = None
-        self._arrow_target_lock = threading.Lock()
-        self._arrow_wake = threading.Event()
-        self._arrow_stop = threading.Event()
-        self._arrow_epoch = 0
-        self._arrow_thread = threading.Thread(
-            target=self._arrow_async_loop, daemon=True, name="ArrowNavFetch")
-        self._arrow_thread.start()
-
-    def _stop_arrow_async(self) -> None:
-        ev = getattr(self, "_arrow_stop", None)
-        if ev is None:
-            return
-        ev.set()
-        self._arrow_wake.set()
-        try:
-            self._arrow_thread.join(timeout=1.0)
-        except Exception:
-            pass
-
-    def _enqueue_arrow_fetch(self, target: int) -> int:
-        """Request an async fetch of ``target``. Returns an epoch; the worker
-        only commits if the epoch still matches at completion time (coalesces
-        rapid keypresses so only the final landing target blocks the frame)."""
-        with self._arrow_target_lock:
-            self._arrow_epoch += 1
-            self._arrow_target = int(target)
-            my_epoch = self._arrow_epoch
-        self._arrow_wake.set()
-        return my_epoch
-
-    def _arrow_async_loop(self) -> None:
-        while not self._arrow_stop.is_set():
-            if not self._arrow_wake.wait(timeout=0.5):
-                continue
-            self._arrow_wake.clear()
-            with self._arrow_target_lock:
-                target = self._arrow_target
-                my_epoch = self._arrow_epoch
-            if target is None or self.pyav_source is None:
-                continue
-            frame = self.pyav_source.get_frame(int(target), timeout=2.0, accurate=False)
-            if frame is None:
-                continue
-            self._buffer_append(int(target), frame)
-            with self._arrow_target_lock:
-                stale = (self._arrow_epoch != my_epoch)
-            if stale:
-                continue
-            with self.frame_lock:
-                self.current_frame = frame
-                self._frame_version += 1
-
     # --------------------------------------------------------------- arrow nav
 
     def _nav_to_target(self, target_frame: int) -> Optional[np.ndarray]:
-        """Shared path for both forward and backward arrow nav. Cache hit
-        returns the frame synchronously; cache miss advances the cursor and
-        enqueues an async fetch so imgui never blocks on a slow seek."""
+        """Shared path for both forward and backward arrow nav: buffer hit
+        first, fall through to the PyAV source."""
         frame = self._buffer_lookup(target_frame)
         if frame is not None:
             self.current_frame_index = target_frame
@@ -167,12 +105,15 @@ class NavBufferMixin:
         if self.pyav_source is None:
             self.logger.warning(f"Nav miss and no PyAV source for frame {target_frame}")
             return None
-        # Cache miss: advance cursor sync (timeline tracks the keypress) and
-        # enqueue an async fetch. Background worker commits the frame via
-        # current_frame + _frame_version bump when decode lands.
+        # advance cursor sync so timeline tracks key even on timeout
         self.current_frame_index = target_frame
-        self._enqueue_arrow_fetch(target_frame)
-        return None
+        # accurate=False + 250ms budget caps UI block on cache miss
+        frame = self.pyav_source.get_frame(target_frame, timeout=0.25, accurate=False)
+        if frame is None:
+            self.logger.debug(f"PyAV get_frame({target_frame}) timed out (cursor advanced anyway)")
+            return None
+        self._buffer_append(target_frame, frame)
+        return frame
 
     def arrow_nav_forward(self, target_frame: int) -> Optional[np.ndarray]:
         """Navigate forward: buffer hit, otherwise PyAV get_frame."""
