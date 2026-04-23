@@ -105,14 +105,12 @@ class NavBufferMixin:
         if self.pyav_source is None:
             self.logger.warning(f"Nav miss and no PyAV source for frame {target_frame}")
             return None
-        # advance cursor sync so timeline tracks key even on timeout
-        self.current_frame_index = target_frame
-        # accurate=False + 250ms budget caps UI block on cache miss
-        frame = self.pyav_source.get_frame(target_frame, timeout=0.25, accurate=False)
+        frame = self.pyav_source.get_frame(target_frame, timeout=2.0)
         if frame is None:
-            self.logger.debug(f"PyAV get_frame({target_frame}) timed out (cursor advanced anyway)")
+            self.logger.warning(f"PyAV get_frame({target_frame}) returned None")
             return None
         self._buffer_append(target_frame, frame)
+        self.current_frame_index = target_frame
         return frame
 
     def arrow_nav_forward(self, target_frame: int) -> Optional[np.ndarray]:
