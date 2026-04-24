@@ -44,8 +44,13 @@ This project is still at the early stages of development. It is not intended for
 **One installer for every platform. No miniconda, no admin rights, ~500 MB on disk.**
 
 ### Windows
-1. Download: [install.bat](https://raw.githubusercontent.com/ack00gar/FunGen-AI-Powered-Funscript-Generator/main/install.bat)
-2. Double-click to run.
+1. Download: [install.bat](https://raw.githubusercontent.com/ack00gar/FunGen-AI-Powered-Funscript-Generator/main/install.bat) (right-click the link, "Save link as...").
+2. Double-click `install.bat` to run.
+
+Or, in `cmd` (one-liner):
+```bat
+curl -L -o install.bat https://raw.githubusercontent.com/ack00gar/FunGen-AI-Powered-Funscript-Generator/main/install.bat && install.bat
+```
 
 ### Linux / macOS
 ```bash
