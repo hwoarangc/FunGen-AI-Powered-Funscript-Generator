@@ -292,12 +292,22 @@ def check_and_install_dependencies(*, non_interactive: bool = True, auto_install
             nightly_index_url = f"https://download.pytorch.org/whl/nightly/{cuda_version}"
             logger.info(f"Checking torch-tensorrt and tensorrt for {cuda_version} from nightly index...")
             
-            # Check if torch-tensorrt is already installed
-            try:
-                version('torch_tensorrt')
-                logger.info(f"torch-tensorrt for {cuda_version} already installed.")
-            except PackageNotFoundError:
-                logger.warning(f"torch-tensorrt for {cuda_version} is missing.")
+            # Check if both torch_tensorrt AND tensorrt are installed. The
+            # validation panel imports tensorrt directly, so torch_tensorrt
+            # alone is not enough -- if a prior install left tensorrt out we
+            # silently skipped the fix until the user hit the [FAIL] in the
+            # TensorRT compiler. Check both packages and reinstall if either
+            # is missing.
+            missing = []
+            for pkg in ("torch_tensorrt", "tensorrt"):
+                try:
+                    version(pkg)
+                except PackageNotFoundError:
+                    missing.append(pkg)
+            if not missing:
+                logger.info(f"torch-tensorrt and tensorrt for {cuda_version} already installed.")
+            else:
+                logger.warning(f"{'/'.join(missing)} for {cuda_version} missing.")
                 # Pin the currently-installed torch stack on this command so
                 # pip's resolver cannot silently upgrade torch (and drop CUDA
                 # support in the process) while pulling in torch-tensorrt.
