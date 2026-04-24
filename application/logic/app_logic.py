@@ -1001,6 +1001,11 @@ class ApplicationLogic:
         if numeric_level is not None and hasattr(self, '_logger_instance'):
             self._logger_instance.set_level(numeric_level)
             self.logging_level_setting = level_name
+            # Persist so subsequent CLI/batch runs pick up the same level.
+            try:
+                self.app_settings.set("logging_level", level_name)
+            except Exception as e:
+                self.logger.debug(f"Could not persist logging_level: {e}")
             self.logger.info(f"Logging level changed to: {level_name}", extra={'status_message': True})
         else:
             self.logger.warning(f"Failed to set logging level or invalid level: {level_name}")
