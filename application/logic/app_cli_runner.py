@@ -143,7 +143,7 @@ class AppCLIRunner:
                 video_paths.append(input_path)
             elif os.path.isdir(input_path):
                 self.app.logger.info(f"Scanning folder for videos: {input_path} (Recursive: {args.recursive})")
-                valid_extensions = {".mp4", ".mkv", ".mov", ".avi", ".webm"}
+                valid_extensions = {".mp4", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".webm"}
                 if args.recursive:
                     for root, _, files in os.walk(input_path):
                         for file in files:

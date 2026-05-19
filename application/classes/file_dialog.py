@@ -60,7 +60,7 @@ class ImGuiFileDialog:
         self.extension_groups: list[tuple[str, list[str]]] = []
         self.show_overwrite_confirm: bool = False
         self.overwrite_file_path: str = ""
-        self.video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.webm'] # Added
+        self.video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm']
 
         # Cached directory listing and metadata to avoid per-frame filesystem hits
         self._current_dir_cached: str = ""

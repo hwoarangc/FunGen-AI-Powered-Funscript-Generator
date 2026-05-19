@@ -13,7 +13,7 @@ from typing import Optional, Callable, Set
 
 logger = logging.getLogger(__name__)
 
-VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm"}
+VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".webm"}
 
 
 class WatchedFolderProcessor:

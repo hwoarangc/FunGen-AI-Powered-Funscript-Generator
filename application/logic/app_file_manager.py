@@ -1377,7 +1377,7 @@ class AppFileManager:
     def _scan_folder_for_videos(self, folder_path: str) -> List[str]:
         """Recursively scans a folder for video files."""
         video_files = []
-        valid_extensions = {".mp4", ".mkv", ".mov", ".avi", ".webm"}
+        valid_extensions = {".mp4", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".webm"}
         self.app.logger.info(f"Scanning folder: {folder_path}")
         for root, _, files in os.walk(folder_path):
             for file in files:
@@ -1397,7 +1397,7 @@ class AppFileManager:
         from application.classes import ImGuiFileDialog
 
         videos_to_process = []
-        valid_video_extensions = {".mp4", ".mkv", ".mov", ".avi", ".webm"}
+        valid_video_extensions = {".mp4", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".webm"}
 
         # Categorize all dropped paths
         for path in paths:
