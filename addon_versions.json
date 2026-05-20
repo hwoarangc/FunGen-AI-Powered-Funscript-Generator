@@ -6,9 +6,9 @@
       "changelog": "Parity helpers (TCode UDP/TCP backends, dirty dedupe, sync ramp, smart limit, auto-reconnect), multi-instance backend support, addons_common shared package"
     },
     "streamer": {
-      "version": "3.7.0",
+      "version": "3.7.2",
       "display_name": "Video Streamer",
-      "changelog": "RFC 7233 range parser in handlers (returns 416 on bad ranges), ETag with mtime, video_path snapshot in all handlers, image proxy SSRF allowlist + streaming, codec cache (path/mtime), mDNS keepalive, transcode cache cleanup, transcode cache key includes mtime"
+      "changelog": "Loop-safe aiohttp session: recreate per running loop so XBVR/Stash scene fetch no longer fails with 'Timeout context manager should be used inside a task' when the HereSphere bridge loop reuses the sync server's session"
     },
     "subtitle_translation": {
       "version": "1.0.2",
