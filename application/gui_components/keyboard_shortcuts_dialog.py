@@ -330,7 +330,9 @@ class KeyboardShortcutsDialog:
                         )
                     imgui.spacing()
 
-            imgui.end_child()
+        # EndChild must run even when BeginChild culls (window dragged
+        # off-screen returns False), else the window End() asserts.
+        imgui.end_child()
 
         imgui.separator()
 
@@ -589,7 +591,8 @@ class KeyboardShortcutsDialog:
                     imgui.spacing()
                     imgui.spacing()
 
-                imgui.end_child()
+            # EndChild must run even when BeginChild culls (off-screen).
+            imgui.end_child()
 
             imgui.separator()
 

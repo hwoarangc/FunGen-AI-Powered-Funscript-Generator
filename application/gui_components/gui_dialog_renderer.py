@@ -136,7 +136,8 @@ class DialogRendererMixin:
                         imgui.pop_id()
 
                     imgui.end_table()
-                imgui.end_child()
+            # EndChild must run even when BeginChild culls (off-screen).
+            imgui.end_child()
 
             imgui.separator()
             imgui.text("Processing Method:")
