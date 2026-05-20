@@ -46,8 +46,7 @@ class DeviceControlCoreMixin:
                         imgui.text_colored("Install the latest device_control zip from your purchase.", *CurrentTheme.GRAY_LIGHT)
                     elif isinstance(err, (ImportError, ModuleNotFoundError)):
                         imgui.spacing()
-                        imgui.text_colored("Device Control addon not found or incomplete.", *CurrentTheme.YELLOW_LIGHT)
-                        imgui.text_colored("Install the latest device_control zip from your purchase.", *CurrentTheme.GRAY_LIGHT)
+                        self._render_dc_import_error_hint(err)
                     else:
                         imgui.text_colored("Check logs for details.", *CurrentTheme.ORANGE)
                 else:
@@ -65,9 +64,26 @@ class DeviceControlCoreMixin:
                 imgui.text_colored("Did you update to the latest Device Control version?", *CurrentTheme.YELLOW_LIGHT)
                 imgui.text_colored("Install the latest device_control zip from your purchase.", *CurrentTheme.GRAY_LIGHT)
             elif isinstance(e, (ImportError, ModuleNotFoundError)):
-                imgui.text_colored("Device Control addon not found or incomplete.", *CurrentTheme.YELLOW_LIGHT)
-                imgui.text_colored("Install the latest device_control zip from your purchase.", *CurrentTheme.GRAY_LIGHT)
+                self._render_dc_import_error_hint(e)
             imgui.text_colored("See logs for full details.", *CurrentTheme.DESCRIPTION_TEXT)
+
+    def _render_dc_import_error_hint(self, err):
+        """Render the right hint for an ImportError during addon init.
+
+        Only an import that names the device_control package means the
+        addon is actually missing. An ImportError naming a dependency
+        (aiohttp, bleak, websockets, serial) means the addon is present
+        but the venv is broken, so the old "reinstall the zip" message
+        sent users down the wrong path. err.name holds the failed module."""
+        name = getattr(err, 'name', '') or ''
+        if name.startswith('device_control'):
+            imgui.text_colored("Device Control addon not found or incomplete.", *CurrentTheme.YELLOW_LIGHT)
+            imgui.text_colored("Install the latest device_control zip from your purchase.", *CurrentTheme.GRAY_LIGHT)
+        else:
+            dep = name.split('.')[0] if name else "a dependency"
+            imgui.text_colored(f"A required dependency ('{dep}') failed to load.", *CurrentTheme.YELLOW_LIGHT)
+            imgui.text_colored("Your Python environment is likely corrupted, not the addon.", *CurrentTheme.YELLOW_LIGHT)
+            imgui.text_colored("Delete the .venv folder and rerun launch.bat to rebuild it.", *CurrentTheme.GRAY_LIGHT)
 
 
     def _initialize_device_control(self):
