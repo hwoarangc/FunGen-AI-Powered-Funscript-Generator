@@ -312,6 +312,20 @@ class MpvDisplayGL:
         self._loaded = False
         return False
 
+    def set_audio_enabled(self, enabled: bool) -> None:
+        """Toggle libmpv audio output at runtime.
+
+        Batch/offline processing can disable mpv audio to avoid WASAPI device
+        invalidation from interrupting long unattended runs.
+        """
+        self.with_audio = bool(enabled)
+        if self._player is None:
+            return
+        try:
+            self._player["audio"] = "auto" if self.with_audio else "no"
+        except Exception as e:
+            self.logger.debug(f"set_audio_enabled failed: {e}")
+
     def set_fps_fallback(self, fps: float) -> None:
         try:
             f = float(fps)

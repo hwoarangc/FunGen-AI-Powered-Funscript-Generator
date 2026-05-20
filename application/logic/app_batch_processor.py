@@ -147,6 +147,30 @@ class AppBatchProcessor:
     def is_batch_paused(self) -> bool:
         return self.app.is_batch_processing_active and self.app.pause_batch_event.is_set()
 
+    def _set_mpv_audio_enabled(self, enabled: bool) -> None:
+        """Best-effort toggle for embedded mpv audio output."""
+        gui = getattr(self.app, "gui_instance", None)
+        disp = getattr(gui, "mpv_display", None) if gui else None
+        if not disp:
+            return
+        try:
+            disp.set_audio_enabled(bool(enabled))
+            self.app.logger.info(f"Batch: mpv audio {'enabled' if enabled else 'disabled'}")
+        except Exception as e:
+            self.app.logger.debug(f"Batch: set mpv audio failed: {e}")
+
+    @staticmethod
+    def _should_disable_mpv_audio(runtime_category, selected_mode: str) -> bool:
+        """Disable mpv audio only for the problematic offline VR hybrid batch mode."""
+        try:
+            from config.tracker_discovery import TrackerCategory
+            return (
+                runtime_category == TrackerCategory.OFFLINE
+                and selected_mode == "OFFLINE_VR_HYBRID_CHAPTER"
+            )
+        except Exception:
+            return False
+
     # --- Adaptive Batch Tuning Methods ---
 
     def _init_adaptive_tuning(self) -> AdaptiveTuningState:
@@ -244,6 +268,7 @@ class AppBatchProcessor:
 
         batch_failures = []  # (video_path, reason, timestamp)
 
+        restore_mpv_audio_enabled = bool(self.app.app_settings.config.audio.enabled)
         try:
             for i, video_data in enumerate(self.app.batch_video_paths):
                 if self.app.stop_batch_event.is_set():
@@ -315,15 +340,6 @@ class AppBatchProcessor:
                             f"Processing '{video_basename}': Mode 2 selected, will process regardless of funscript existence or version.")
                 # --- End of pre-flight checks ---
 
-                open_success = self.app.file_manager.open_video_from_path(video_path)
-                if not open_success:
-                    self.app.logger.error(f"Failed to open video, skipping: {video_path}")
-                    batch_failures.append((video_path, "Failed to open video", datetime.now().isoformat()))
-                    continue
-
-                time.sleep(1.0)
-                if self.app.stop_batch_event.is_set(): break
-
                 # Use the dynamically selected tracker name
                 discovery = get_tracker_discovery()
 
@@ -351,6 +367,17 @@ class AppBatchProcessor:
                 # would skip them here otherwise.
                 from config.tracker_discovery import TrackerCategory
                 runtime_category = discovery.get_runtime_category(self.app.batch_tracker_name)
+                disable_mpv_audio = self._should_disable_mpv_audio(runtime_category, selected_mode)
+                self._set_mpv_audio_enabled(not disable_mpv_audio)
+
+                open_success = self.app.file_manager.open_video_from_path(video_path)
+                if not open_success:
+                    self.app.logger.error(f"Failed to open video, skipping: {video_path}")
+                    batch_failures.append((video_path, "Failed to open video", datetime.now().isoformat()))
+                    continue
+
+                time.sleep(1.0)
+                if self.app.stop_batch_event.is_set(): break
 
                 # --- OFFLINE MODES (Stage-based processing) ---
                 if runtime_category == TrackerCategory.OFFLINE:
@@ -498,6 +525,7 @@ class AppBatchProcessor:
             self.app.logger.error(f"An error occurred during the batch process: {e}", exc_info=True)
             batch_failures.append(("(batch process)", str(e), datetime.now().isoformat()))
         finally:
+            self._set_mpv_audio_enabled(restore_mpv_audio_enabled)
             # Write batch error report if any failures occurred
             if batch_failures:
                 self._write_batch_error_report(batch_failures)
