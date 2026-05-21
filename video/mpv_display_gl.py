@@ -35,11 +35,16 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import os
 import threading
 import time
 from typing import Callable, List, Optional
 
 from video.mpv_loader import mpv, mpv_available
+
+# Env-gated sync diagnostics: logs how far the displayed frame (video-pts)
+# trails the audio master clock (time-pos), so 8K VR desync is measurable.
+_SYNC_DBG = os.environ.get('FUNGEN_SYNC_DEBUG', '').lower() in ('1', 'true', 'yes')
 
 
 def _extract_bad_mpv_option(exc) -> Optional[str]:
@@ -571,7 +576,30 @@ class MpvDisplayGL:
                         continue
                 if fps <= 0:
                     return
-            idx = int(round(self._last_time_pos * fps))
+            # Sample the frame actually on screen (video-pts), not the audio
+            # master clock (time-pos). Under heavy render load (8K VR dewarp)
+            # the displayed frame trails the audio clock; reading time-pos here
+            # ran the overlays/gauge/simulator ahead of the video. Fall back to
+            # time-pos when video-pts is unavailable (startup, just-seeked,
+            # audio-only) so the worst case equals the previous behavior.
+            pos = self._last_time_pos
+            try:
+                vpts = self._player['video-pts']
+            except Exception:
+                vpts = None
+            if vpts is not None:
+                try:
+                    vpts = float(vpts)
+                except (TypeError, ValueError):
+                    vpts = None
+            if vpts is not None:
+                if _SYNC_DBG and abs(self._last_time_pos - vpts) > 0.05:
+                    self.logger.info(
+                        f"[sync] displayed video-pts={vpts:.3f}s trails "
+                        f"time-pos={self._last_time_pos:.3f}s by "
+                        f"{self._last_time_pos - vpts:.3f}s")
+                pos = vpts
+            idx = int(round(pos * fps))
             cbs = self._position_callbacks
             if not cbs:
                 return

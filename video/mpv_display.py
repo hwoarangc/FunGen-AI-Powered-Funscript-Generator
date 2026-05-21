@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import os
 import threading
 import time
 from typing import Callable, List, Optional
@@ -11,6 +12,10 @@ from typing import Callable, List, Optional
 import numpy as np
 
 from video.mpv_loader import mpv, mpv_available
+
+# Env-gated sync diagnostics: logs how far the displayed frame (video-pts)
+# trails the audio master clock (time-pos), so 8K VR desync is measurable.
+_SYNC_DBG = os.environ.get('FUNGEN_SYNC_DEBUG', '').lower() in ('1', 'true', 'yes')
 
 
 SeekCallback = Callable[[int], None]
@@ -481,7 +486,29 @@ class MpvDisplay:
                     except (TypeError, ValueError):
                         continue
             if fps > 0:
-                idx = int(round(self._last_time_pos * fps))
+                # Sample the displayed frame (video-pts), not the audio master
+                # clock (time-pos): under render lag the displayed frame trails
+                # the clock, and reading time-pos ran overlays ahead of video.
+                # Fall back to time-pos when video-pts is unavailable so the
+                # worst case equals the previous behavior.
+                pos = self._last_time_pos
+                try:
+                    vpts = self._player['video-pts']
+                except Exception:
+                    vpts = None
+                if vpts is not None:
+                    try:
+                        vpts = float(vpts)
+                    except (TypeError, ValueError):
+                        vpts = None
+                if vpts is not None:
+                    if _SYNC_DBG and abs(self._last_time_pos - vpts) > 0.05:
+                        self.logger.info(
+                            f"[sync] displayed video-pts={vpts:.3f}s trails "
+                            f"time-pos={self._last_time_pos:.3f}s by "
+                            f"{self._last_time_pos - vpts:.3f}s")
+                    pos = vpts
+                idx = int(round(pos * fps))
                 for cb in list(self._position_callbacks):
                     try:
                         cb(idx)
