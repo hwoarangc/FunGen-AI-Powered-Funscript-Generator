@@ -11,9 +11,9 @@
       "changelog": "Loop-safe aiohttp session: recreate per running loop so XBVR/Stash scene fetch no longer fails with 'Timeout context manager should be used inside a task' when the HereSphere bridge loop reuses the sync server's session"
     },
     "subtitle_translation": {
-      "version": "1.0.4",
+      "version": "1.0.5",
       "display_name": "Subtitle Translation",
-      "changelog": "Pre-fetch the Qwen translation LLM before going offline (first Generate on a clean install failed: default LLM backend was uncached and HF offline mode blocked the download), models_ready gate so all models are cached before enable_offline_mode, dead-code cleanup"
+      "changelog": "CUDA/CPU large tier now uses the uncensored Orion-zhen/Qwen2.5-7B-Instruct-Uncensored (the same source the MLX large model is converted from), so Windows/Linux users stop getting the censored model at the best setting. Also pre-fetches the translation LLM before going offline so the first Generate on a clean install no longer fails"
     },
     "addons_common": {
       "version": "0.1.1",
