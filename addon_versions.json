@@ -11,9 +11,9 @@
       "changelog": "Loop-safe aiohttp session: recreate per running loop so XBVR/Stash scene fetch no longer fails with 'Timeout context manager should be used inside a task' when the HereSphere bridge loop reuses the sync server's session"
     },
     "subtitle_translation": {
-      "version": "1.0.2",
+      "version": "1.0.4",
       "display_name": "Subtitle Translation",
-      "changelog": "Batched LLM translation (8 cues/call, ~5x throughput) with per-line parse-failure fallback, VAD model singleton, streaming audio energy, cleanup helper, BackgroundJob threaded wrapper"
+      "changelog": "Pre-fetch the Qwen translation LLM before going offline (first Generate on a clean install failed: default LLM backend was uncached and HF offline mode blocked the download), models_ready gate so all models are cached before enable_offline_mode, dead-code cleanup"
     },
     "addons_common": {
       "version": "0.1.1",

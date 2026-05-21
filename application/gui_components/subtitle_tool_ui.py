@@ -995,14 +995,31 @@ class SubtitleToolUI:
 
         def _run():
             try:
-                from subtitle_translation.model_downloader import check_dependencies_installed, download_models
-                if not check_dependencies_installed():
-                    self._on_progress(0.0, "Installing dependencies...")
-                    if not download_models(progress_callback=self._on_progress):
-                        self._gen_error = "Install failed"
+                from subtitle_translation import model_downloader as _mdl
+                from subtitle_translation.model_downloader import download_models
+                # Ensure packages + Whisper + the translation LLM are all cached
+                # BEFORE going offline. Gating on dependencies alone skipped the
+                # LLM download, so the first Generate hit enable_offline_mode()
+                # with Qwen uncached and translation failed. Older addons
+                # (< 1.0.4) lack models_ready / the llm_size arg, so degrade to
+                # the dependency-only gate for them.
+                if hasattr(_mdl, 'models_ready'):
+                    ready = _mdl.models_ready(source_lang=lang or 'ja', llm_size=llm_size)
+                else:
+                    ready = _mdl.check_dependencies_installed()
+                if not ready:
+                    self._on_progress(0.0, "Downloading models (first run, may take a while)...")
+                    try:
+                        ok = download_models(source_lang=lang or 'ja',
+                                             llm_size=llm_size,
+                                             progress_callback=self._on_progress)
+                    except TypeError:
+                        ok = download_models(progress_callback=self._on_progress)
+                    if not ok:
+                        self._gen_error = "Model download failed"
                         return
 
-                # Go offline AFTER deps are confirmed but BEFORE model loading
+                # Go offline AFTER all models are cached but BEFORE model loading
                 from subtitle_translation.pipeline import enable_offline_mode, SubtitlePipeline
                 enable_offline_mode()
                 self.track = SubtitlePipeline(
