@@ -219,6 +219,10 @@ class FirstRunWizard:
                 # Live preview
                 imgui.get_io().font_global_scale = scale_val
                 self.app.app_settings.config.ui.global_font_scale = scale_val
+                # Explicit pick: turn off auto system-DPI scaling, else it
+                # re-detects the system DPI on the next launch and overwrites
+                # this choice (same as the settings dropdown does on change).
+                self.app.app_settings.config.ui.auto_system_scaling = False
 
     def _render_step_output(self):
         imgui.dummy(0, 20)
