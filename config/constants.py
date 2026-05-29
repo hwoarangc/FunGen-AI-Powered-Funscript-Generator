@@ -426,6 +426,8 @@ class ChapterSource(Enum):
     IMPORTED = "imported"                       # Imported from external file
     KEYBOARD_SHORTCUT = "keyboard_shortcut"     # Created via keyboard shortcut
     GAP_FILL = "gap_fill"                       # Auto-created to fill gap
+    MANUAL_GAP_FILL = "manual_gap_fill"         # User triggered "Create Chapter in Gap & Track"
+    MANUAL_MERGE_GAP_FILL = "manual_merge_gap_fill"  # User triggered merge with gap tracking
     TRACK_AND_MERGE = "track_and_merge"         # Created from track gap & merge operation
 
     @classmethod
