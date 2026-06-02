@@ -23,7 +23,8 @@ def _radio_line(label, is_selected):
 class MainMenu:
     __slots__ = ("app", "gui", "FRAME_OFFSET", "_last_menu_log_time", "_show_about_dialog",
                  "_support_texture_id", "_support_width", "_support_height", "_is_macos",
-                 "_feat_supporter", "_feat_device", "_feat_streamer")
+                 "_feat_supporter", "_feat_device", "_feat_streamer",
+                 "_show_beta_announce", "_beta_announce_initialized", "_beta_dont_notify")
 
     def __init__(self, app_instance, gui_instance=None):
         self.app = app_instance
@@ -40,6 +41,13 @@ class MainMenu:
         self._feat_supporter = _is_feature_available("patreon_features")
         self._feat_device = _is_feature_available("device_control")
         self._feat_streamer = _is_feature_available("streamer")
+        # "FunGen 2 beta is available" promo: a one-shot startup popup plus
+        # a standing menu-bar entry. The startup popup is suppressed once
+        # the user ticks "Do not notify me again" (persisted in settings);
+        # the menu-bar entry stays as a manual door.
+        self._show_beta_announce = False
+        self._beta_announce_initialized = False
+        self._beta_dont_notify = False
 
     # ------------------------- HELPER METHODS -------------------------
 
@@ -379,6 +387,97 @@ class MainMenu:
             # Popup was closed (X button)
             self._show_about_dialog = False
 
+    # Releases page for the ground-up rewrite (separate repo from this one).
+    BETA_RELEASES_URL = "https://github.com/ack00gar/FunGen/releases"
+
+    def _render_beta_announce_menu_entry(self):
+        """Standing 'FunGen 2 beta available' promo on the menu bar, just
+        after the Streamer indicator. Opens the announcement popup."""
+        imgui.push_style_color(imgui.COLOR_BUTTON, 0.2, 0.5, 0.9, 1.0)
+        imgui.push_style_color(imgui.COLOR_BUTTON_HOVERED, 0.3, 0.6, 1.0, 1.0)
+        imgui.push_style_color(imgui.COLOR_BUTTON_ACTIVE, 0.1, 0.4, 0.8, 1.0)
+        clicked = imgui.small_button("FunGen 2 beta available!")
+        imgui.pop_style_color(3)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("A new beta of FunGen 2 is available - click to learn more")
+        if clicked:
+            self._show_beta_announce = True
+
+    def _render_beta_announce_dialog(self):
+        """The FunGen 2 beta announcement popup: message + clickable link,
+        a 'Check it out' / 'Dismiss' pair, and a 'Do not notify me again'
+        checkbox that persists the suppression."""
+        if not self._show_beta_announce:
+            return
+
+        url = self.BETA_RELEASES_URL
+        opened = begin_modal_centered("FunGen 2 beta available##Beta2Announce", 470)
+
+        if opened:
+            imgui.push_style_color(imgui.COLOR_TEXT, 0.4, 0.8, 1.0, 1.0)
+            imgui.text("FunGen 2 beta is available!")
+            imgui.pop_style_color()
+
+            imgui.spacing()
+            imgui.separator()
+            imgui.spacing()
+
+            imgui.text_wrapped(
+                "A new beta of FunGen 2, the ground-up rewrite, is available. "
+                "Check it out at:"
+            )
+            imgui.spacing()
+
+            # Clickable link (transparent button styled as an accent link).
+            imgui.push_style_color(imgui.COLOR_BUTTON, 0.0, 0.0, 0.0, 0.0)
+            imgui.push_style_color(imgui.COLOR_BUTTON_HOVERED, 0.0, 0.0, 0.0, 0.0)
+            imgui.push_style_color(imgui.COLOR_BUTTON_ACTIVE, 0.0, 0.0, 0.0, 0.0)
+            imgui.push_style_color(imgui.COLOR_TEXT, 0.4, 0.8, 1.0, 1.0)
+            if imgui.button(url):
+                self._open_beta_url(url)
+            imgui.pop_style_color(4)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("Open in your browser")
+
+            imgui.spacing()
+            imgui.separator()
+            imgui.spacing()
+
+            # "Do not notify me again" - persisted; suppresses the startup popup.
+            changed, dont = imgui.checkbox("Do not notify me again", self._beta_dont_notify)
+            if changed:
+                self._beta_dont_notify = dont
+                try:
+                    self.app.app_settings.set("fungen2_beta_announce_dismissed", dont)
+                except Exception as e:
+                    if getattr(self.app, 'logger', None):
+                        self.app.logger.warning(f"Could not persist beta-announce setting: {e}")
+
+            imgui.spacing()
+
+            from application.utils import primary_button_style
+            with primary_button_style():
+                if imgui.button("Check it out", width=200):
+                    self._open_beta_url(url)
+                    self._show_beta_announce = False
+                    imgui.close_current_popup()
+            imgui.same_line()
+            if imgui.button("Dismiss", width=150):
+                self._show_beta_announce = False
+                imgui.close_current_popup()
+
+            imgui.end_popup()
+        else:
+            # Popup was closed (X button / Esc).
+            self._show_beta_announce = False
+
+    def _open_beta_url(self, url):
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            if getattr(self.app, 'logger', None):
+                self.app.logger.warning(f"Could not open FunGen 2 releases link: {e}")
+
     # ------------------------- MAIN RENDER -------------------------
 
     def render(self):
@@ -388,6 +487,21 @@ class MainMenu:
         stage_proc = app.stage_processor
 
         # _feat_* flags resolved in __init__; session-stable.
+        # One-time-per-session: raise the FunGen 2 beta popup at startup
+        # unless the user dismissed it for good.
+        if not self._beta_announce_initialized:
+            self._beta_announce_initialized = True
+            try:
+                dismissed = bool(app.app_settings.get("fungen2_beta_announce_dismissed", False))
+            except Exception:
+                dismissed = False
+            self._beta_dont_notify = dismissed
+            # Don't fight the first-run wizard; the popup waits for a later
+            # launch (the menu-bar entry is still available meanwhile).
+            is_first_run = bool(getattr(app.app_settings, "is_first_run", False))
+            if not dismissed and not is_first_run:
+                self._show_beta_announce = True
+
         if imgui.begin_main_menu_bar():
             self._render_menu_bar_logo()
 
@@ -407,11 +521,15 @@ class MainMenu:
             # Render Streamer indicator
             self._render_native_sync_indicator()
 
+            # FunGen 2 beta promo, right after the Streamer indicator.
+            self._render_beta_announce_menu_entry()
+
             imgui.end_main_menu_bar()
 
         self._render_timeline_selection_popup()
         self._render_timeline_comparison_results_popup()
         self._render_about_dialog()
+        self._render_beta_announce_dialog()
 
     # ------------------------- MENUS -------------------------
 
